@@ -1,3 +1,4 @@
+
 name: Build JARVIS APK
 
 on:
@@ -28,7 +29,9 @@ jobs:
           cache: true
 
       - name: Create Android Structure
-        run: flutter create . --platforms android --project-name jarvis_app
+        run: |
+          flutter create . --platforms android --project-name jarvis_app
+          sed -i -E 's/id "org.jetbrains.kotlin.android" version "[^"]+"/id "org.jetbrains.kotlin.android" version "1.9.22"/' android/settings.gradle || true
 
       - name: Get Dependencies
         run: flutter pub get
@@ -42,4 +45,3 @@ jobs:
           name: JARVIS-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-
