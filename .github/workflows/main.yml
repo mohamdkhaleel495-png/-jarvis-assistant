@@ -27,13 +27,19 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Generate Android Project with Namespace
+      - name: Create Android Scaffold and Fix Namespace
         run: |
           flutter create . --org com.example --project-name jarvis --platforms android
-          # Ensure namespace is explicitly set in app build.gradle
-          if [ -f android/app/build.gradle ]; then
-            sed -i '/defaultConfig {/i \    namespace "com.example.jarvis"' android/app/build.gradle
-          fi
+          # Explicitly inject namespace directly inside android { } block
+          python3 -c '
+          path = "android/app/build.gradle"
+          with open(path, "r") as f:
+              content = f.read()
+          if "namespace" not in content:
+              content = content.replace("android {", "android {\n    namespace \"com.example.jarvis\"", 1)
+              with open(path, "w") as f:
+                  f.write(content)
+          '
 
       - name: Install Dependencies
         run: flutter pub get
