@@ -1,199 +1,206 @@
 import 'package:flutter/material.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 
 void main() {
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: JarvisHome(),
-  ));
+  runApp(const JarvisApp());
 }
 
-class JarvisHome extends StatefulWidget {
-  const JarvisHome({super.key});
+class JarvisApp extends StatelessWidget {
+  const JarvisApp({super.key});
 
   @override
-  State<JarvisHome> createState() => _JarvisHomeState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'JARVIS AI',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const JarvisHomeScreen(),
+    );
+  }
 }
 
-class _JarvisHomeState extends State<JarvisHome> {
+class JarvisHomeScreen extends StatefulWidget {
+  const JarvisHomeScreen({super.key});
+
+  @override
+  State<JarvisHomeScreen> createState() => _JarvisHomeScreenState();
+}
+
+class _JarvisHomeScreenState extends State<JarvisHomeScreen> {
+  // Yahan 'AAPKI_GEMINI_API_KEY_YAHAN_DAALEIN' hata kar apni real Gemini API key likhein
+  static const String _geminiApiKey = 'AAPKI_GEMINI_API_KEY_YAHAN_DAALEIN';
+
+  late final GenerativeModel _model;
   late stt.SpeechToText _speech;
-  late FlutterTts _tts;
+  late FlutterTts _flutterTts;
+
   bool _isListening = false;
-  bool _isAwake = false;
-  String _statusText = "Initializing...";
-  String _recognizedWords = "";
-  String _jarvisReply = "Say 'Hey Jarvis' to wake me up.";
+  bool _isLoading = false;
+  String _userText = "Mic button dabayein aur kuch bole...";
+  String _aiResponse = "";
 
   @override
   void initState() {
     super.initState();
+    _initGemini();
+    _initSpeech();
+    _initTts();
+  }
+
+  void _initGemini() {
+    _model = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: _geminiApiKey,
+      systemInstruction: Content.system(
+        'Aap ek intelligent voice assistant hain jiska naam JARVIS hai. '
+        'Aap har sawal ka saaf, seedha aur helpful jawab dete hain. '
+        'Jawab concise aur easy to understand rakhein.',
+      ),
+    );
+  }
+
+  void _initSpeech() {
     _speech = stt.SpeechToText();
-    _tts = FlutterTts();
-    _initEngine();
   }
 
-  void _initEngine() async {
-    await _tts.setLanguage("en-US");
-    await _tts.setPitch(0.9);
-    await _tts.setSpeechRate(0.5);
+  void _initTts() {
+    _flutterTts = FlutterTts();
+    _flutterTts.setLanguage("hi-IN");
+    _flutterTts.setSpeechRate(0.5);
+  }
 
-    bool available = await _speech.initialize(
-      onStatus: (status) {
-        if (status == "done" || status == "notListening") {
-          _restartListening();
-        }
-      },
-      onError: (val) {
-        _restartListening();
-      },
-    );
+  Future<void> _askGemini(String prompt) async {
+    if (prompt.trim().isEmpty) return;
 
-    if (available) {
+    setState(() {
+      _isLoading = true;
+      _aiResponse = "JARVIS soch raha hai...";
+    });
+
+    try {
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+
+      final reply = response.text ?? "Maaf kijiye, koi jawab nahi mila.";
+
       setState(() {
-        _statusText = "Listening for 'Hey Jarvis'...";
+        _aiResponse = reply;
+        _isLoading = false;
       });
-      _startWakeWordLoop();
-    } else {
+
+      await _flutterTts.speak(reply);
+    } catch (e) {
       setState(() {
-        _statusText = "Microphone permission denied.";
+        _aiResponse = "Error: $e\n(Check karein ki API key valid hai aur Internet chal raha hai)";
+        _isLoading = false;
       });
     }
   }
 
-  void _restartListening() {
-    if (mounted && !_speech.isListening) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _startWakeWordLoop();
-      });
-    }
-  }
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) {
+          if (val == 'done' || val == 'notListening') {
+            setState(() => _isListening = false);
+            if (_userText.isNotEmpty && _userText != "Sun raha hoon...") {
+              _askGemini(_userText);
+            }
+          }
+        },
+        onError: (val) => print('Error: $val'),
+      );
 
-  void _startWakeWordLoop() {
-    _speech.listen(
-      onResult: (result) {
-        String words = result.recognizedWords.toLowerCase();
+      if (available) {
         setState(() {
-          _recognizedWords = result.recognizedWords;
+          _isListening = true;
+          _userText = "Sun raha hoon...";
         });
-
-        if (!_isAwake) {
-          if (words.contains("jarvis") || words.contains("hey jarvis")) {
-            _onWakeWordTriggered();
-          }
-        } else {
-          if (result.finalResult || words.length > 5) {
-            _executeCommand(words);
-          }
-        }
-      },
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 5),
-      partialResults: true,
-      cancelOnError: false,
-      listenMode: stt.ListenMode.dictation,
-    );
-    setState(() {
-      _isListening = true;
-    });
-  }
-
-  void _onWakeWordTriggered() async {
-    setState(() {
-      _isAwake = true;
-      _statusText = "Awake! Listening to your command...";
-      _jarvisReply = "Yes Sir, I am listening.";
-    });
-    await _speech.stop();
-    await _tts.speak("Yes Sir");
-
-    Future.delayed(const Duration(milliseconds: 700), () {
-      _startWakeWordLoop();
-    });
-  }
-
-  void _executeCommand(String command) async {
-    await _speech.stop();
-    setState(() {
-      _isAwake = false;
-      _statusText = "Processing command...";
-      _jarvisReply = "Executing: $command";
-    });
-
-    String replyText = "Command acknowledged: $command";
-    await _tts.speak(replyText);
-
-    setState(() {
-      _statusText = "Listening for 'Hey Jarvis'...";
-    });
-
-    _restartListening();
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              _userText = val.recognizedWords;
+            });
+          },
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+      if (_userText.isNotEmpty && _userText != "Sun raha hoon...") {
+        _askGemini(_userText);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
       appBar: AppBar(
-        title: const Text("J.A.R.V.I.S", style: TextStyle(color: Colors.cyanAccent, letterSpacing: 3)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: const Text('JARVIS Assistant'),
         centerTitle: true,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 130,
-                height: 130,
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[900],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Aapne kaha:", style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  Text(_userText, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _isAwake ? Colors.greenAccent : Colors.cyanAccent,
-                    width: 3,
+                  color: Colors.grey[850],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("JARVIS ka jawab:", style: TextStyle(color: Colors.cyanAccent)),
+                      const SizedBox(height: 10),
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else
+                        Text(
+                          _aiResponse.isEmpty ? "Sawalon ke jawab yahan aayenge..." : _aiResponse,
+                          style: const TextStyle(fontSize: 16, height: 1.4),
+                        ),
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isAwake ? Colors.greenAccent : Colors.cyanAccent).withOpacity(0.3),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                    )
-                  ],
-                ),
-                child: Icon(
-                  _isAwake ? Icons.graphic_eq : Icons.mic,
-                  color: _isAwake ? Colors.greenAccent : Colors.cyanAccent,
-                  size: 60,
                 ),
               ),
-              const SizedBox(height: 35),
-              Text(
-                _statusText,
-                style: const TextStyle(color: Colors.white70, fontSize: 16),
-              ),
-              const SizedBox(height: 15),
-              Text(
-                _recognizedWords.isEmpty ? "..." : _recognizedWords,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 14),
-              ),
-              const SizedBox(height: 25),
-              Text(
-                _jarvisReply,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.cyanAccent,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+            FloatingActionButton.large(
+              onPressed: _listen,
+              backgroundColor: _isListening ? Colors.red : Colors.cyan,
+              child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 40),
+            ),
+            const SizedBox(height: 10),
+            Text(_isListening ? "Listening..." : "Tap mic to speak"),
+          ],
         ),
       ),
     );
   }
 }
+
