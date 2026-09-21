@@ -27,63 +27,22 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create Android Structure and Setup Configurations
+      - name: Generate Android Project with Namespace
         run: |
-          flutter create . --platforms android --project-name jarvis_app
+          flutter create . --org com.example --project-name jarvis --platforms android
+          # Ensure namespace is explicitly set in app build.gradle
+          if [ -f android/app/build.gradle ]; then
+            sed -i '/defaultConfig {/i \    namespace "com.example.jarvis"' android/app/build.gradle
+          fi
 
-          # Upgrade Gradle wrapper to 8.4
-          sed -i -E 's/gradle-.*-all.zip/gradle-8.4-all.zip/' android/gradle/wrapper/gradle-wrapper.properties || true
-          sed -i -E 's/gradle-.*-bin.zip/gradle-8.4-all.zip/' android/gradle/wrapper/gradle-wrapper.properties || true
-
-          # Overwrite settings.gradle to use Kotlin 2.0.0
-          cat << 'EOF' > android/settings.gradle
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null : "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }()
-
-              includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "8.3.2" apply false
-              id "org.jetbrains.kotlin.android" version "2.0.0" apply false
-          }
-
-          include ":app"
-          EOF
-
-          # Set minSdkVersion to 21
-          sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle || true
-          sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle || true
-
-          # Add Permissions to AndroidManifest.xml
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' $MANIFEST
-
-          # Add speech recognition queries for Android 11+
-          sed -i '/<\/application>/a \    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>' $MANIFEST
-
-      - name: Get Dependencies
+      - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Release APK
         run: flutter build apk --release
 
-      - name: Upload JARVIS APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JARVIS-APK
+          name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
