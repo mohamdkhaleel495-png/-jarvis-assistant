@@ -27,7 +27,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create Android Structure
+      - name: Create Android Structure and Add Permissions
         run: |
           flutter create . --platforms android --project-name jarvis_app
 
@@ -64,6 +64,13 @@ jobs:
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle || true
           sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle || true
 
+          # ADD MICROPHONE, INTERNET & BLUETOOTH PERMISSIONS
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' $MANIFEST
+
+          # Add speech recognition queries for Android 11+
+          sed -i '/<\/application>/a \    <queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>' $MANIFEST
+
       - name: Get Dependencies
         run: flutter pub get
 
@@ -76,4 +83,5 @@ jobs:
           name: JARVIS-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
 
