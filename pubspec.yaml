@@ -1,6 +1,7 @@
-name: jarvis_app
-description: "A new Flutter project."
+name: personal_jarvis
+description: "My Personal Voice Assistant"
 publish_to: 'none'
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -8,10 +9,25 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  google_generative_ai: ^0.4.6
-  speech_to_text: ^7.0.0
-  flutter_tts: 3.8.5
+  cupertino_icons: ^1.0.8
+
+  # Speech & Voice
+  speech_to_text: ^6.6.0
+  flutter_tts: ^3.8.5
+
+  # Phone calls & Contacts
+  phone_state: ^1.0.4
+  permission_handler: ^11.3.1
+  flutter_contacts: ^1.1.8
+
+  # Utilities
+  intl: ^0.19.0
+  battery_plus: ^5.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
-  
