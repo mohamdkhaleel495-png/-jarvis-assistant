@@ -27,9 +27,13 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create Android Structure and Add Permissions
+      - name: Create Android Structure and Setup Configurations
         run: |
           flutter create . --platforms android --project-name jarvis_app
+
+          # Upgrade Gradle wrapper to 8.4
+          sed -i -E 's/gradle-.*-all.zip/gradle-8.4-all.zip/' android/gradle/wrapper/gradle-wrapper.properties || true
+          sed -i -E 's/gradle-.*-bin.zip/gradle-8.4-all.zip/' android/gradle/wrapper/gradle-wrapper.properties || true
 
           # Overwrite settings.gradle to use Kotlin 2.0.0
           cat << 'EOF' > android/settings.gradle
@@ -64,7 +68,7 @@ jobs:
           sed -i 's/minSdkVersion .*/minSdkVersion 21/' android/app/build.gradle || true
           sed -i 's/minSdk = .*/minSdk = 21/' android/app/build.gradle || true
 
-          # ADD MICROPHONE, INTERNET & BLUETOOTH PERMISSIONS
+          # Add Permissions to AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.BLUETOOTH" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />' $MANIFEST
 
@@ -83,5 +87,3 @@ jobs:
           name: JARVIS-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-
-
